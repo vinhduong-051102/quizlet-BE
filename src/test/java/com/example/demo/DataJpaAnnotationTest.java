@@ -1,9 +1,13 @@
 package com.example.demo;
+import com.example.demo.dto.LessonDto;
 import com.example.demo.dto.UserDto;
+import com.example.demo.dto.WordDto;
 import com.example.demo.entity.User;
-import com.example.demo.exception.DuplicateUserNameException;
-import com.example.demo.exception.TooShortUserNameException;
+import com.example.demo.entity.Word;
+import com.example.demo.exception.*;
+import com.example.demo.repository.LessonRepository;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.repository.WordRepository;
 import com.example.demo.service.impl.LessonServiceImpl;
 import com.example.demo.service.impl.UserServiceImpl;
 import com.example.demo.service.impl.WordServiceImpl;
@@ -19,6 +23,9 @@ import org.springframework.test.context.junit4.SpringRunner;
 
 import javax.persistence.EntityManager;
 import javax.sql.DataSource;
+
+import java.util.List;
+import java.util.UUID;
 
 import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,9 +46,12 @@ public class DataJpaAnnotationTest {
     private UserServiceImpl userService;
     @Autowired
     private WordServiceImpl wordService;
-
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private WordRepository wordRepository;
+    @Autowired
+    private LessonRepository lessonRepository;
 
     @Test
     public void allComponentAreNotNull() {
@@ -91,9 +101,211 @@ public class DataJpaAnnotationTest {
         }
     }
 
+    @Test
+    // ID 4: Đăng kí với password là chuỗi rỗng
+    public void id4() {
+        try {
+            User mockUser = new User("mockUser", "");
+            userService.createUser(mockUser);
+            fail("Expected UserNameOrPasswordIsEmptyException but no exception was thrown.");
+        } catch (UserNameOrPasswordIsEmptyException ex) {
+            assertEquals("User name and password must have value",
+                    ex.getMessage());
+        }
+    }
+
+    @Test
+    // ID 5: Đăng nhập hợp lệ
+    public void id5() {
+        User mockUser = new User("mockUserName", "mockPassword");
+        userService.createUser(mockUser);
+        UserDto userLogin = userService.getUserByUserNameAndPassword(mockUser);
+        Assertions.assertThat(userLogin.getId()).isEqualTo(mockUser.getId());
+    }
+
+    @Test
+    // ID 6: Đăng nhập người dùng sai thông tin ( sai username hoặc password )
+    public void id6() {
+        try {
+            User mockUser = new User("mockUserName", "mockPassword");
+            userService.createUser(mockUser);
+            userService.getUserByUserNameAndPassword(new User("mockk",
+                            "mockPassword"));
+            fail("Expected InvalidUserException but no exception was thrown.");
+
+        } catch (InvalidUserException ex) {
+            assertEquals("User name or password is wrong", ex.getMessage());
+        }
+    }
+
+    @Test
+    // ID 7: Đăng nhập với thông tin username và password là chuỗi rỗng
+    public void id7() {
+        try {
+            userService.getUserByUserNameAndPassword(new User("",
+                    ""));
+            fail("Expected UserNameOrPasswordIsEmptyException but no exception was thrown.");
+        } catch (UserNameOrPasswordIsEmptyException ex) {
+            assertEquals("User name and password must have value",
+                    ex.getMessage());
+        }
+    }
+
+    @Test
+    // ID 8: Tạo thông tin học phần mới hợp lệ
+    public void id8() {
+        User mockUser = new User("mockUserName", "mockPassword");
+        UserDto userDto = userService.createUser(mockUser);
+        LessonDto lessonDto = lessonService.createLesson(userDto.getId(), "unit 1", "This " +
+                "lesson will teach you how can test a database", 1);
+        Assertions.assertThat(lessonDto.getDescription()).isEqualTo("This " +
+                "lesson " +
+                "will teach you how can test a database");
+    }
+
+    @Test
+    // ID 9: Tạo thông tin học phần mới với "userId" không tồn tại
+    public void id9() {
+        try {
+            lessonService.createLesson(123, "unit 1", "This" +
+                    " " +
+                    "lesson will teach you how can test a database", 1);
+            fail("Expected UserIsNotExistsException but no exception was thrown.");
+        } catch (UserIsNotExistsException ex) {
+            assertEquals("User is not exist, please check carefully userId",
+                    ex.getMessage());
+        }
+    }
+
+    @Test
+    // ID 10: Tạo từ vựng mới hợp lệ
+    public void id10() {
+        User mockUser = new User("mockUserName", "mockPassword");
+        UserDto userDto = userService.createUser(mockUser);
+        LessonDto lessonDto = lessonService.createLesson(userDto.getId(), "unit 1", "This " +
+                "lesson will teach you how can test a database", 1);
+        Word mockWord = new Word(lessonDto.getId(), "blackbox testing", "Kiểm" +
+                " thử hộp đen", UUID.randomUUID());
+        WordDto wordDto = wordService.addWord(mockWord);
+        Assertions.assertThat(wordDto.getUuid()).isEqualTo(mockWord.getUuid());
+    }
+
+    @Test
+    // ID 11: Tạo từ vựng mới không có vocabulary hoặc meaning
+    public void id11() {
+        try {
+            User mockUser = new User("mockUserName", "mockPassword");
+            UserDto userDto = userService.createUser(mockUser);
+            LessonDto lessonDto = lessonService.createLesson(userDto.getId(), "unit 1", "This " +
+                    "lesson will teach you how can test a database", 1);
+            Word mockWord = new Word(lessonDto.getId(), "", "Kiểm" +
+                    " thử hộp đen", UUID.randomUUID());
+            wordService.addWord(mockWord);
+            fail("Expected InvalidWordException but no exception was thrown.");
+
+        } catch (InvalidWordException ex) {
+            assertEquals("Vocabulary and meaning at a word " +
+                    "must have value", ex.getMessage());
+        }
+    }
+
+    @Test
+    // ID 12: Tạo từ vựng mới của học phần không tồn tại
+    public void id12() {
+        try {
+
+            Word mockWord = new Word(123, "blackbox testing", "Kiểm" +
+                    " thử hộp đen", UUID.randomUUID());
+            wordService.addWord(mockWord);
+            fail("Expected LessonIsNotExistsException but no exception was thrown.");
+
+        } catch (LessonIsNotExistsException ex) {
+            assertEquals("Lesson is not exist, please" +
+                    " check carefully lessonId", ex.getMessage());
+        }
+    }
+
+    @Test
+    // ID 13: Tạo từ vựng mới có vocabulary dài hơn 225 ký tự
+    public void id13() {
+        try {
+            String longString = "The long text .............................." +
+                    "..................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................";
+            User mockUser = new User("mockUserName", "mockPassword");
+            UserDto userDto = userService.createUser(mockUser);
+            LessonDto lessonDto = lessonService.createLesson(userDto.getId(), "unit 1", "This " +
+                    "lesson will teach you how can test a database", 1);
+            Word mockWord = new Word(lessonDto.getId(), longString, "Kiểm" +
+                    " thử hộp đen", UUID.randomUUID());
+            wordService.addWord(mockWord);
+            fail("Expected TooLongVocabularyException but no exception was thrown.");
+
+        } catch (TooLongVocabularyException ex) {
+            assertEquals("The vocabulary is too long," +
+                    " please limit the letter less than 255", ex.getMessage());
+        }
+    }
+
+    @Test
+    // ID 14: Tìm kiếm thông tin của học phần hợp lệ
+    public void id14() {
+        User mockUser = new User("mockUserName", "mockPassword");
+        UserDto userDto = userService.createUser(mockUser);
+        LessonDto lessonDto1 = lessonService.createLesson(userDto.getId(),
+                "unit 1", "This " +
+                "lesson will teach you how can test a database", 1);
+        LessonDto lessonDto2 = lessonService.getLessonById(lessonDto1.getId());
+        Assertions.assertThat(lessonDto1.getId()).isEqualTo(lessonDto2.getId());
+    }
+
+    @Test
+    // ID 15: Tìm kiếm thông tin của học phần không tồn tại
+    public void id15() {
+        try {
+            lessonService.getLessonById(123);
+            fail("Expected LessonIsNotExistsException but no exception was thrown.");
+
+        } catch (LessonIsNotExistsException ex) {
+            assertEquals("Lesson is not exist, please" +
+                    " check carefully lessonId", ex.getMessage());
+        }
+    }
+
+    @Test
+    // ID 16: Lấy thông tin học phần dựa vào userId hợp lệ
+    public void id16() {
+        User mockUser = new User("mockUserName", "mockPassword");
+        UserDto userDto = userService.createUser(mockUser);
+        LessonDto lessonDto = lessonService.createLesson(userDto.getId(), "unit 1", "This " +
+                "lesson will teach you how can test a database", 1);
+        List<LessonDto> lessonDtos = lessonService.getLesson(userDto.getId(),
+                "");
+        Assertions.assertThat(lessonDtos.get(0).getId()).isEqualTo(lessonDto.getId());
+    }
+
+    @Test
+    // ID 17: Lấy thông tin học phần dựa vào userId chưa tạo bất kỳ học phần nào trước đây
+    public void id17() {
+        User mockUser = new User("mockUserName", "mockPassword");
+        UserDto userDto = userService.createUser(mockUser);
+        List<LessonDto> lessonDtos = lessonService.getLesson(userDto.getId(),
+                "");
+        Assertions.assertThat(lessonDtos.size()).isEqualTo(0);
+    }
+
+    @Test
+    // ID 18: Lấy thông học phần dựa vào userId không tồn tại
+    public void id18() {
+        List<LessonDto> lessonDtos = lessonService.getLesson(123,
+                "");
+        Assertions.assertThat(lessonDtos).isEqualTo(null);
+    }
+
     @After
     public void clean() {
         userRepository.deleteAll();
+        lessonRepository.deleteAll();
+        wordRepository.deleteAll();
     }
 
 }

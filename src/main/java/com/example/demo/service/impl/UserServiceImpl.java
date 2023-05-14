@@ -1,7 +1,9 @@
 package com.example.demo.service.impl;
 
 import com.example.demo.exception.DuplicateUserNameException;
+import com.example.demo.exception.InvalidUserException;
 import com.example.demo.exception.TooShortUserNameException;
+import com.example.demo.exception.UserNameOrPasswordIsEmptyException;
 import com.example.demo.repository.UserRepository;
 import org.modelmapper.ModelMapper;
 import com.example.demo.dto.UserDto;
@@ -35,6 +37,11 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
               "letters");
     }
 
+    if(user.getUserName().isBlank() || user.getPassword().isBlank()) {
+      throw new UserNameOrPasswordIsEmptyException("User name and password must have " +
+              "value");
+    }
+
     UserDto userDto = modelMapper.map(user, UserDto.class);
     userRepository.save(user);
     return userDto;
@@ -43,10 +50,15 @@ public class UserServiceImpl implements com.example.demo.service.UserService {
   @Override
   public UserDto getUserByUserNameAndPassword(User user) {
     User userFromDB = userRepository.findByUserNameAndPassword(user.getUserName(), user.getPassword());
-    if(userFromDB != null) {
-      return modelMapper.map(userFromDB, UserDto.class);
+    if (user.getUserName().isBlank() || user.getPassword().isBlank()) {
+      throw new UserNameOrPasswordIsEmptyException("User name and password " +
+              "must have value");
     }
-    return null;
+    if(userFromDB == null) {
+      throw new InvalidUserException("User name or password is wrong");
+    }
+    return modelMapper.map(userFromDB, UserDto.class);
+
   }
   @Override
   public List<UserDto> getAllUser() {
